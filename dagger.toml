@@ -1,0 +1,34 @@
+# Dagger workspace configuration
+# Install modules with: dagger mod install <module>
+# Example:
+#   dagger mod install github.com/dagger/dagger/modules/wolfi
+
+[modules.go]
+source = "github.com/dagger/go"
+
+# Go version used for the default Go base image.
+# settings.version = ""
+# Base image used for Go test, generate, and helper containers.
+# settings.base = "alpine:latest"
+# Extra workspace-root include patterns mounted for each module's Go commands.
+# settings.includeExtraFiles = [""]
+# Module roots to lint. A bare pattern selects, a "!"-prefixed pattern
+# settings.lint = [""]
+# Module roots to test. Same selection rules as `lint`.
+# settings.test = [""]
+# Module roots to run go generate in. Same selection rules as `lint`.
+# settings.generate = [""]
+
+[modules.go.settings]
+# NOTE: list-valued settings must be written as a single comma-separated
+# string, NOT a TOML array. The v1.0.0-beta.6 go module JSON-serializes a
+# TOML array and then comma-splits it, so array form reaches the module as
+# mangled values (e.g. `["a`, `"b"`, `c"]`). The string form below delivers
+# clean values — verify with `dagger call go include-extra-files --json`.
+#
+# These three files are generator inputs read via os.ReadFile by
+# neo4j-cli/internal/skill/gen (go generate) and TestGenerator_RoundTrip.
+# They are neither .go nor testdata nor go:embed targets, so the go module
+# does not mount them by default. The committed bundle/ tree IS mounted
+# because embed.go has `//go:embed bundle`.
+includeExtraFiles = "neo4j-cli/internal/skill/description.txt,neo4j-cli/internal/skill/additions.md,neo4j-cli/internal/skill/query-additions.md"
