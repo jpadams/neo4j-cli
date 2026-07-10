@@ -1,0 +1,42 @@
+# Runs `dagger check` (go:lint-all, go:test-all, go:generate-all) on every
+# push to main and every PR, using the Dagger beta6 release.
+#
+# This is the "hybrid mode" trigger: it runs the exact same checks defined in
+# dagger.toml that you run locally with `dagger check`, on GitHub-hosted
+# runners. It needs no Dagger Cloud source mapping. Dagger auto-provisions its
+# engine via the Docker daemon that GitHub's ubuntu runners ship with.
+#
+# Dagger Cloud traces are optional: add a `DAGGER_CLOUD_TOKEN` repository
+# secret to light them up. The workflow works fine without it.
+name: Dagger
+
+on:
+    push:
+        branches: ["main"]
+    pull_request:
+        branches: ["main"]
+
+permissions:
+    contents: read
+
+jobs:
+    check:
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+            # Bootstrap a Dagger CLI into the runner. The exact bootstrap
+            # version does not matter: DAGGER_X_RELEASE below makes this CLI
+            # download and re-exec the pinned beta6 engine + CLI at runtime.
+            - name: Install Dagger CLI
+              run: |
+                  curl -fsSL https://dl.dagger.io/dagger/install.sh | BIN_DIR="$HOME/.local/bin" sh
+                  echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+            - name: Run Dagger checks
+              env:
+                  DAGGER_X_RELEASE: v1.0.0-beta.6
+                  # Optional: enables Dagger Cloud traces for this run. Harmless
+                  # when the secret is unset.
+                  DAGGER_CLOUD_TOKEN: ${{ secrets.DAGGER_CLOUD_TOKEN }}
+              run: dagger check
