@@ -5,6 +5,7 @@ package skill_test
 
 import (
 	"bytes"
+	"errors"
 	"io/fs"
 	"path/filepath"
 	"testing"
@@ -21,6 +22,22 @@ import (
 )
 
 const testSkillName = "neo4j-cli"
+
+// setHomeForTest points the skill package's homeDirFn seam at homeDir for
+// the duration of the test. The seam is used instead of mutating the process
+// environment, which is not cross-platform: Windows PowerShell sessions don't
+// set HOME and os.UserHomeDir reads %USERPROFILE% there. An empty home makes
+// the seam return an error, matching the internal-package helper's semantics.
+func setHomeForTest(t *testing.T, homeDir string) {
+	t.Helper()
+	restore := skill.SetHomeDirFnForTest(func() (string, error) {
+		if homeDir == "" {
+			return "", errors.New("no home directory")
+		}
+		return homeDir, nil
+	})
+	t.Cleanup(restore)
+}
 
 // fixtureBundle mirrors the shape used by installer_test.go.
 func fixtureBundle() fs.FS {
@@ -62,10 +79,10 @@ func newStandaloneSkillCmd(cfg *clicfg.Config) *cobra.Command {
 
 // newFixture wires up a cfg + skill command, populating agent detect dirs
 // for every name in agentNames. `output` becomes the `format` config
-// value ("default", "json", or "table"). The test HOME is set to homeDir.
+// value ("default", "json", or "table"). The test home is set to homeDir.
 func newFixture(t *testing.T, homeDir, output string, agentNames ...string) *fixture {
 	t.Helper()
-	t.Setenv("HOME", homeDir)
+	setHomeForTest(t, homeDir)
 	t.Setenv("XDG_CONFIG_HOME", filepath.Join(homeDir, "xdg"))
 
 	cfgJSON := `{"format":"` + output + `"}`
@@ -96,7 +113,7 @@ func newRootFixture(t *testing.T, homeDir, output string, agentNames ...string) 
 	origTraverse := cobra.EnableTraverseRunHooks
 	cobra.EnableTraverseRunHooks = true
 	t.Cleanup(func() { cobra.EnableTraverseRunHooks = origTraverse })
-	t.Setenv("HOME", homeDir)
+	setHomeForTest(t, homeDir)
 	t.Setenv("XDG_CONFIG_HOME", filepath.Join(homeDir, "xdg"))
 
 	cfgJSON := `{"format":"` + output + `"}`

@@ -6,6 +6,7 @@ package skill
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 
 	"github.com/spf13/afero"
@@ -91,7 +92,7 @@ func TestClaudeDesktopPathsPerPlatform(t *testing.T) {
 			wantOk:     true,
 		},
 		{
-			name:       "windows falls back to HOME/AppData/Roaming when APPDATA is unset",
+			name:       "windows falls back to the home directory when APPDATA is unset",
 			goos:       "windows",
 			home:       filepath.FromSlash("/Users/alice"),
 			wantDetect: filepath.Join("/Users/alice", "AppData", "Roaming", "Claude"),
@@ -107,13 +108,13 @@ func TestClaudeDesktopPathsPerPlatform(t *testing.T) {
 			wantOk:     true,
 		},
 		{
-			name:   "darwin with no HOME is unresolvable",
+			name:   "darwin with no home is unresolvable",
 			goos:   "darwin",
 			home:   "",
 			wantOk: false,
 		},
 		{
-			name:   "windows with neither APPDATA nor HOME is unresolvable",
+			name:   "windows with neither APPDATA nor home is unresolvable",
 			goos:   "windows",
 			home:   "",
 			wantOk: false,
@@ -123,7 +124,7 @@ func TestClaudeDesktopPathsPerPlatform(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			setGOOSForTest(t, tc.goos)
-			t.Setenv("HOME", tc.home)
+			setHomeForTest(t, tc.home)
 			t.Setenv("XDG_CONFIG_HOME", "")
 			t.Setenv("APPDATA", tc.appData)
 
@@ -153,7 +154,7 @@ func TestClaudeDesktopPathsPerPlatform(t *testing.T) {
 // mis-filtered caller from writing to a relative path: an absent capability
 // resolves to ok=false, never to an empty-but-usable path.
 func TestPathAccessorsRefuseAbsentCapability(t *testing.T) {
-	t.Setenv("HOME", "/home/alice")
+	setHomeForTest(t, "/home/alice")
 
 	skillOnly := FindAgent("claude-code")
 	require.NotNil(t, skillOnly)
@@ -181,14 +182,14 @@ func TestExpandPath(t *testing.T) {
 		wantOk   bool
 	}{
 		{
-			name:   "bare tilde expands to HOME",
+			name:   "bare tilde expands to the home directory",
 			path:   "~",
 			home:   "/home/alice",
 			want:   "/home/alice",
 			wantOk: true,
 		},
 		{
-			name:   "tilde slash prefix expands to HOME/sub",
+			name:   "tilde slash prefix expands under the home directory",
 			path:   "~/.claude",
 			home:   "/home/alice",
 			want:   filepath.Join("/home/alice", ".claude"),
@@ -202,13 +203,13 @@ func TestExpandPath(t *testing.T) {
 			wantOk: true,
 		},
 		{
-			name:   "bare tilde with no HOME returns ok=false",
+			name:   "bare tilde with no home returns ok=false",
 			path:   "~",
 			home:   "",
 			wantOk: false,
 		},
 		{
-			name:   "tilde slash with no HOME returns ok=false",
+			name:   "tilde slash with no home returns ok=false",
 			path:   "~/.claude",
 			home:   "",
 			wantOk: false,
@@ -226,7 +227,7 @@ func TestExpandPath(t *testing.T) {
 			wantOk: true,
 		},
 		{
-			name:     "XDG unset falls back to HOME/.config",
+			name:     "XDG unset falls back to <home>/.config",
 			path:     "$XDG_CONFIG_HOME/opencode",
 			home:     "/home/alice",
 			xdgUnset: true,
@@ -234,7 +235,7 @@ func TestExpandPath(t *testing.T) {
 			wantOk:   true,
 		},
 		{
-			name:     "XDG empty string falls back to HOME/.config",
+			name:     "XDG empty string falls back to <home>/.config",
 			path:     "$XDG_CONFIG_HOME/opencode",
 			home:     "/home/alice",
 			xdg:      "",
@@ -243,7 +244,7 @@ func TestExpandPath(t *testing.T) {
 			wantOk:   true,
 		},
 		{
-			name:     "XDG fallback with no HOME returns ok=false",
+			name:     "XDG fallback with no home returns ok=false",
 			path:     "$XDG_CONFIG_HOME/opencode",
 			home:     "",
 			xdgUnset: true,
@@ -282,7 +283,7 @@ func TestExpandPath(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			t.Setenv("HOME", tc.home)
+			setHomeForTest(t, tc.home)
 			// Setting XDG_CONFIG_HOME="" is equivalent to unset for our
 			// purposes — expandPath treats empty the same as missing.
 			if tc.xdgUnset {
@@ -309,7 +310,7 @@ func TestExpandPath(t *testing.T) {
 // the OS separator. On Unix this is a no-op (forward slashes are
 // native); on Windows it ensures backslash-only output.
 func TestExpandPathOpenCodeMixedSlashIsOSNative(t *testing.T) {
-	t.Setenv("HOME", filepath.FromSlash("/home/alice"))
+	setHomeForTest(t, filepath.FromSlash("/home/alice"))
 	// Force the OS-native form so the post-substitution path inherits
 	// the OS separator.
 	t.Setenv("XDG_CONFIG_HOME", filepath.FromSlash("/home/alice/.config"))
@@ -355,7 +356,7 @@ func TestFindAgent(t *testing.T) {
 }
 
 func TestDetectAgents(t *testing.T) {
-	t.Setenv("HOME", "/home/alice")
+	setHomeForTest(t, "/home/alice")
 	t.Setenv("XDG_CONFIG_HOME", "/home/alice/xdg")
 
 	fs := afero.NewMemMapFs()
@@ -373,7 +374,7 @@ func TestDetectAgents(t *testing.T) {
 }
 
 func TestDetectAgentsEmpty(t *testing.T) {
-	t.Setenv("HOME", "/home/alice")
+	setHomeForTest(t, "/home/alice")
 	t.Setenv("XDG_CONFIG_HOME", "/home/alice/xdg")
 
 	fs := afero.NewMemMapFs()
@@ -382,13 +383,13 @@ func TestDetectAgentsEmpty(t *testing.T) {
 }
 
 func TestDetectAgentsHomeUnset(t *testing.T) {
-	t.Setenv("HOME", "")
+	setHomeForTest(t, "")
 	t.Setenv("XDG_CONFIG_HOME", "")
 
 	fs := afero.NewMemMapFs()
 	got := DetectAgents(fs)
-	// All AGENTS reference HOME (directly or via XDG fallback) — unresolvable
-	// paths are skipped, so the result is empty.
+	// All AGENTS reference the home directory (directly or via XDG
+	// fallback) — unresolvable paths are skipped, so the result is empty.
 	assert.Empty(t, got)
 }
 
@@ -396,7 +397,7 @@ func TestDetectAgentsIgnoresFile(t *testing.T) {
 	// DetectDir must be a directory, not a file. afero.DirExists returns
 	// false for files, so a file at the marker path doesn't count as
 	// detected.
-	t.Setenv("HOME", "/home/alice")
+	setHomeForTest(t, "/home/alice")
 	fs := afero.NewMemMapFs()
 	require.NoError(t, afero.WriteFile(fs, filepath.Join("/home/alice", ".claude"), []byte("not a dir"), 0644))
 
@@ -406,7 +407,7 @@ func TestDetectAgentsIgnoresFile(t *testing.T) {
 
 func TestDetectMCPAgents(t *testing.T) {
 	setGOOSForTest(t, "darwin")
-	t.Setenv("HOME", filepath.FromSlash("/Users/alice"))
+	setHomeForTest(t, filepath.FromSlash("/Users/alice"))
 	t.Setenv("XDG_CONFIG_HOME", "")
 
 	fs := afero.NewMemMapFs()
@@ -425,7 +426,7 @@ func TestDetectMCPAgents(t *testing.T) {
 }
 
 func TestAgentDetectAndSkillsPath(t *testing.T) {
-	t.Setenv("HOME", "/home/alice")
+	setHomeForTest(t, "/home/alice")
 	t.Setenv("XDG_CONFIG_HOME", "/home/alice/xdg")
 
 	a := FindAgent("claude-code")
@@ -438,4 +439,61 @@ func TestAgentDetectAndSkillsPath(t *testing.T) {
 	sp, ok := a.SkillsPath()
 	require.True(t, ok)
 	assert.Equal(t, filepath.Join("/home/alice", ".claude/skills"), sp)
+}
+
+// TestDetectAgentsWindowsHomeFromSeam is the CLI-243 regression guard. A
+// Windows PowerShell session does not set HOME, so the pre-fix expandPath
+// (which read the HOME env var) could not resolve any tilde-based agent —
+// including Codex, whose ChatGPT Desktop home is %USERPROFILE%\.codex — and
+// `skill install --all` reported "no supported agents detected". Home now
+// comes from the os.UserHomeDir seam, which reads %USERPROFILE% on Windows.
+func TestDetectAgentsWindowsHomeFromSeam(t *testing.T) {
+	setGOOSForTest(t, "windows")
+	home := `C:\Users\alice`
+	setHomeForTest(t, home)
+
+	codex := FindAgent("codex")
+	require.NotNil(t, codex)
+
+	detectDir, ok := codex.DetectPath()
+	require.True(t, ok)
+	assert.Equal(t, filepath.Join(home, ".codex"), detectDir)
+
+	skillsDir, ok := codex.SkillsPath()
+	require.True(t, ok)
+	assert.Equal(t, filepath.Join(home, ".codex", "skills"), skillsDir)
+
+	fs := afero.NewMemMapFs()
+	require.NoError(t, fs.MkdirAll(detectDir, 0755))
+
+	got := DetectAgents(fs)
+	require.Len(t, got, 1)
+	assert.Equal(t, "codex", got[0].Name)
+}
+
+// TestExpandPathNativeHomeResolution exercises the unmocked homeDirFn
+// (os.UserHomeDir) on the host's real OS, mirroring
+// desktopclient.TestDefaultDataDir_NativeOS: each CI matrix entry asserts
+// its own native resolution. HOME is set to a control path that must NOT
+// steer resolution on Windows (os.UserHomeDir reads %USERPROFILE% there)
+// but MUST steer it on unix. Rewiring homeDirFn back to os.Getenv("HOME")
+// re-ships CLI-243 and fails this test on windows-latest.
+func TestExpandPathNativeHomeResolution(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Setenv("HOME", filepath.FromSlash("C:/control/home-env"))
+		profile := filepath.FromSlash("C:/control/user-profile")
+		t.Setenv("USERPROFILE", profile)
+
+		got, ok := expandPath("~/.codex")
+		require.True(t, ok)
+		assert.Equal(t, filepath.Join(profile, ".codex"), got)
+		return
+	}
+
+	home := filepath.FromSlash("/control/home-env")
+	t.Setenv("HOME", home)
+
+	got, ok := expandPath("~/.codex")
+	require.True(t, ok)
+	assert.Equal(t, filepath.Join(home, ".codex"), got)
 }
