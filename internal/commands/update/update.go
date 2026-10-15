@@ -15,7 +15,8 @@
 //   - update.go        — cobra wiring + RunE flow that ties the modules
 //     together. The flow follows REQ-F-002…REQ-F-016 in
 //     prd-self-update-command.md.
-//   - release.go       — GitHub release discovery + asset URL builder.
+//   - release.go       — release discovery via the static releases.json
+//     metadata served from neo4j.sh + GoReleaser-style asset URL builder.
 //   - install_method.go— is the running binary under a known package-manager
 //     prefix? + the rich passthrough hint.
 //   - swap.go          — download + verify + extract + atomic rename.
@@ -63,9 +64,9 @@ var (
 	// uses internal/skill.List; tests swap to seed installed/uninstalled
 	// agents without touching disk.
 	listSkillsFn = commonskill.List
-	// listReleasesFn fetches the 30 latest releases from the GitHub API for
-	// changelog rendering after a successful swap. Tests swap to control the
-	// returned release list without network.
+	// listReleasesFn fetches the release list from the releases.json metadata
+	// document for changelog rendering after a successful swap. Tests swap to
+	// control the returned release list without network.
 	listReleasesFn = ListReleases
 	// installSkillFn refreshes a single agent's bundle. Production uses
 	// internal/skill.Install with a one-agent filter; tests swap to assert

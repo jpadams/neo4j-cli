@@ -110,16 +110,16 @@ const maxChecksumBytes = 64 << 10 // 64 KiB
 // absurd file size.
 const maxExtractedBytes int64 = 250 << 20 // 250 MiB
 
-// allowedDownloadHosts pins HTTP redirects (REQ-S-001) for archive +
-// checksum downloads to GitHub-controlled hosts. A redirect to any other
+// allowedDownloadHosts pins HTTP redirects (REQ-S-001) for the releases.json
+// metadata fetch and the archive + checksum downloads to the static metadata
+// host (neo4j.sh) and GitHub-controlled asset hosts. A redirect to any other
 // host aborts the request before the body is read so a malicious upstream
-// cannot redirect to an attacker-controlled origin and exfiltrate the
-// Authorization header (we don't send one on download — REQ kept tokens out
-// of asset URLs — but defense in depth).
+// cannot redirect to an attacker-controlled origin (we don't send an
+// Authorization header on any of these requests, but defense in depth).
 var allowedDownloadHosts = map[string]struct{}{
+	"neo4j.sh":                             {},
 	"github.com":                           {},
 	"objects.githubusercontent.com":        {},
-	"api.github.com":                       {},
 	"codeload.github.com":                  {},
 	"release-assets.githubusercontent.com": {},
 }
@@ -515,7 +515,14 @@ func windowsSwap(currentAbs, tmpNew string) error {
 }
 
 // downloadCapped fetches a URL via httpDoFn with a body cap and host pin.
-// Returns the body bytes on success.
+// It is the SINGLE REQ-S-001 download pipeline for the whole self-update
+// flow: the releases.json metadata document (fetchReleases) and the release
+// archive + checksums (Swap) all go through it, so no fetch path is weaker
+// than another. Returns the body bytes on success.
+//
+// The Accept: application/json header is sent unconditionally: the metadata
+// endpoint wants it, and the GitHub asset endpoints ignore content
+// negotiation on /releases/download/ URLs, so it is harmless there.
 func downloadCapped(ctx context.Context, rawURL string, cap int64) ([]byte, error) {
 	if err := assertAllowedHost(rawURL); err != nil {
 		return nil, err
@@ -525,9 +532,10 @@ func downloadCapped(ctx context.Context, rawURL string, cap int64) ([]byte, erro
 		return nil, fmt.Errorf("build request: %w", err)
 	}
 	req.Header.Set("User-Agent", "neo4j-cli-update")
-	// We deliberately do NOT send the GH_TOKEN here. Public release assets
-	// don't require auth and avoiding the header keeps an Authorization
-	// value out of any redirected request the runtime might issue.
+	req.Header.Set("Accept", "application/json")
+	// We deliberately do NOT send an Authorization header here. Public
+	// release assets don't require auth and avoiding the header keeps
+	// credentials out of any redirected request the runtime might issue.
 
 	resp, err := httpDoFn(req)
 	if err != nil {
