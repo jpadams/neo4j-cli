@@ -32,8 +32,12 @@ jobs:
               run: bats distribution/installation-scripts/tests/install-neo4j-cli.bats
 
     powershell-tests:
-        name: Pester (windows-latest)
+        name: Pester (${{ matrix.shell }})
         runs-on: windows-latest
+        strategy:
+            fail-fast: false
+            matrix:
+                shell: [powershell, pwsh]
         steps:
             - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
